@@ -5,7 +5,6 @@ description = "Generate plantuml code from Rust's modules."
 authors = ["nrskt <chipuno0602@gmail.com>"]
 readme = "README.md"
 license = "MIT OR Apache-2.0"
-documentation = "https://github.com/nrskt/ruml"
 repository = "https://github.com/nrskt/ruml.git"
 homepage = "https://github.com/nrskt/ruml"
 keywords = ["uml", "plantuml", "generator", "modeling-language"]
