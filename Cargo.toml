@@ -1,0 +1,21 @@
+[package]
+name = "ruml"
+version = "0.1.0"
+authors = ["nrskt <chipuno0602@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = "2.33.0"
+quote = "1.0.2"
+walkdir = "2.2.9"
+
+[dependencies.syn]
+version = "1.0.5"
+features = [
+    "extra-traits", 
+    "full", 
+    "parsing",
+    "printing",
+]
