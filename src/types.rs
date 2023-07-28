@@ -8,24 +8,54 @@ pub struct Entity {
     pub entity_type: EntityType,
     pub name: String,
     pub fields: Vec<Entity>,
+    pub visibility: Visibility,
 }
 
 impl Entity {
-    pub fn new(entity_type: EntityType, name: &str, fields: Vec<Entity>) -> Self {
+    pub fn new(entity_type: EntityType, name: &str, fields: Vec<Entity>, visibility: Visibility) -> Self {
         Entity {
             entity_type,
             name: name.to_string(),
             fields,
+            visibility,
         }
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Visibility {
+    Public,
+    Private,
+}
+
 impl PlantUml for Entity {
     fn render(&self) -> String {
+        let visibility = match self.visibility {
+            Visibility::Public => "+",
+            Visibility::Private => "-",
+        };
         let prefix = match self.entity_type {
-            EntityType::Struct => format!("class \"{}\" {{\n", self.name),
-            EntityType::Enum => format!("enum \"{}\" {{\n", self.name),
-            EntityType::Field(ref name) => format!("    + {}: {}\n", name, self.name),
+            EntityType::Struct =>
+                format!("class \"{}\" {{\n", self.name),
+            EntityType::Enum =>
+                format!("enum \"{}\" {{\n", self.name),
+            EntityType::Field(ref name) =>
+                format!("    {visibility} {}: {}\n", name, self.name),
+            EntityType::Method(ref name) => {
+                let parameters: Vec<String> = self.fields.iter()
+                    .filter_map(|field| {
+                        if let EntityType::Parameter(ref param_type) = field.entity_type {
+                            Some(format!("{}: {}", param_type, field.name))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                let parameters_str = parameters.join(", ");
+                format!("    {visibility} {}({})\n", name, parameters_str)
+            },
+
+            _ => {"".to_string()}
         };
 
         let body: Vec<String> = self
@@ -34,6 +64,7 @@ impl PlantUml for Entity {
             .into_iter()
             .map(|field| match field.entity_type {
                 EntityType::Field(_) => field.render(),
+                EntityType::Method(_) => field.render(),
                 _ => "".to_string(),
             })
             .collect();
@@ -66,6 +97,8 @@ pub enum EntityType {
     Struct,
     Enum,
     Field(String),
+    Method(String),
+    Parameter(String),
 }
 
 fn make_dependencies(type_name: &str) -> HashSet<String> {
