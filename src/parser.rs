@@ -4,15 +4,32 @@ use super::{Entity, EntityType};
 
 pub fn file_parser(file: syn::File) -> Vec<Entity> {
     let mut entities: Vec<Entity> = vec![];
-    for item in file.items {
-        match item {
-            syn::Item::Enum(_item) => (),
-            syn::Item::Struct(item) => {
-                entities.push(struct_parser(item));
-            }
-            _ => (),
+
+    // First pass: create entities for structs
+    for item in &file.items {
+        if let syn::Item::Struct(item) = item {
+            entities.push(struct_parser(item.clone()));
         }
     }
+
+    // Second pass: add methods to entities
+    for item in &file.items {
+        if let syn::Item::Impl(impl_item) = item {
+            if impl_item.trait_.is_some() {
+                continue; // Skip trait implementations for now
+            }
+            let struct_name = if let syn::Type::Path(type_path) = *impl_item.self_ty.clone() {
+                type_path.path.segments.last().unwrap().ident.to_string()
+            } else {
+                continue;
+            };
+            let methods = impl_parser(impl_item.clone());
+            if let Some(entity) = entities.iter_mut().find(|e| e.name == struct_name) {
+                entity.fields.extend(methods);
+            }
+        }
+    }
+
     entities
 }
 
@@ -34,6 +51,41 @@ fn fields_parser(item: syn::Fields) -> Vec<Entity> {
         _ => vec![],
     }
 }
+
+fn impl_parser(impl_item: syn::ItemImpl) -> Vec<Entity> {
+
+    impl_item.items.into_iter().filter_map(|item| {
+        if let syn::ImplItem::Method(method) = item {
+            let method_name = method.sig.ident.to_string();
+            let parameters = method.sig.inputs.into_iter().filter_map(|input| {
+                match input {
+                    syn::FnArg::Typed(pat_type) => {
+                        let parameter_name = match *pat_type.pat {
+                            syn::Pat::Ident(pat_ident) => pat_ident.ident.to_string(),
+                            _ => return None,
+                        };
+                        let parameter_type = pat_type.ty;
+                        let parameter_type_string = quote!(#parameter_type).to_string();
+                        Some(Entity {
+                            entity_type: EntityType::Parameter(parameter_name),
+                            name: parameter_type_string,
+                            fields: vec![],
+                        })
+                    }
+                    _ => None,
+                }
+            }).collect();
+            Some(Entity {
+                entity_type: EntityType::Method(method_name),
+                name: method.sig.ident.to_string(),
+                fields: parameters,
+            })
+        } else {
+            None
+        }
+    }).collect()
+}
+
 
 fn field_parser(field: syn::Field) -> Entity {
     let name = field

@@ -26,6 +26,21 @@ impl PlantUml for Entity {
             EntityType::Struct => format!("class \"{}\" {{\n", self.name),
             EntityType::Enum => format!("enum \"{}\" {{\n", self.name),
             EntityType::Field(ref name) => format!("    + {}: {}\n", name, self.name),
+            EntityType::Method(ref name) => {
+                let parameters: Vec<String> = self.fields.iter()
+                    .filter_map(|field| {
+                        if let EntityType::Parameter(ref param_type) = field.entity_type {
+                            Some(format!("{}: {}", param_type, field.name))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                let parameters_str = parameters.join(", ");
+                format!("    + {}({})\n", name, parameters_str)
+            },
+
+            _ => {"".to_string()}
         };
 
         let body: Vec<String> = self
@@ -34,6 +49,7 @@ impl PlantUml for Entity {
             .into_iter()
             .map(|field| match field.entity_type {
                 EntityType::Field(_) => field.render(),
+                EntityType::Method(_) => field.render(),
                 _ => "".to_string(),
             })
             .collect();
@@ -66,6 +82,8 @@ pub enum EntityType {
     Struct,
     Enum,
     Field(String),
+    Method(String),
+    Parameter(String),
 }
 
 fn make_dependencies(type_name: &str) -> HashSet<String> {
