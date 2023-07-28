@@ -1,4 +1,5 @@
 use quote::quote;
+use crate::types::Visibility;
 
 use super::{Entity, EntityType};
 
@@ -36,10 +37,19 @@ pub fn file_parser(file: syn::File) -> Vec<Entity> {
 fn struct_parser(item: syn::ItemStruct) -> Entity {
     let name = item.ident.to_string();
     let fields = fields_parser(item.fields);
+    let visibility = match_visibility(item.vis);
     Entity {
         entity_type: EntityType::Struct,
         name,
         fields,
+        visibility,
+    }
+}
+
+fn match_visibility(visibility: syn::Visibility) -> Visibility {
+    match visibility {
+        syn::Visibility::Public(_) => Visibility::Public,
+        _ => Visibility::Private,
     }
 }
 
@@ -56,10 +66,12 @@ fn impl_parser(impl_item: syn::ItemImpl) -> Vec<Entity> {
 
     impl_item.items.into_iter().filter_map(|item| {
         if let syn::ImplItem::Method(method) = item {
+            let visibility = match_visibility(method.vis);
             let method_name = method.sig.ident.to_string();
             let parameters = method.sig.inputs.into_iter().filter_map(|input| {
                 match input {
                     syn::FnArg::Typed(pat_type) => {
+
                         let parameter_name = match *pat_type.pat {
                             syn::Pat::Ident(pat_ident) => pat_ident.ident.to_string(),
                             _ => return None,
@@ -70,6 +82,7 @@ fn impl_parser(impl_item: syn::ItemImpl) -> Vec<Entity> {
                             entity_type: EntityType::Parameter(parameter_name),
                             name: parameter_type_string,
                             fields: vec![],
+                            visibility: Visibility::Private,
                         })
                     }
                     _ => None,
@@ -79,6 +92,7 @@ fn impl_parser(impl_item: syn::ItemImpl) -> Vec<Entity> {
                 entity_type: EntityType::Method(method_name),
                 name: method.sig.ident.to_string(),
                 fields: parameters,
+                visibility,
             })
         } else {
             None
@@ -88,6 +102,10 @@ fn impl_parser(impl_item: syn::ItemImpl) -> Vec<Entity> {
 
 
 fn field_parser(field: syn::Field) -> Entity {
+    let visibility = match field.vis {
+        syn::Visibility::Public(_) => Visibility::Public,
+        _ => Visibility::Private,
+    };
     let name = field
         .ident
         .map(|ident| ident.to_string())
@@ -99,9 +117,15 @@ fn field_parser(field: syn::Field) -> Entity {
             EntityType::Field(name),
             &type_parser(field.ty),
             vec![fields],
+            visibility,
         );
     }
-    Entity::new(EntityType::Field(name), &type_parser(field.ty), Vec::new())
+    Entity::new(
+        EntityType::Field(name),
+        &type_parser(field.ty),
+        Vec::new(),
+        visibility
+    )
 }
 
 fn type_parser(type_: syn::Type) -> String {
@@ -136,7 +160,7 @@ fn make_dependencies(type_name: &str) -> Entity {
         .collect::<Vec<String>>();
     let dependencies = dependencies
         .into_iter()
-        .map(|x| Entity::new(EntityType::Field("".to_string()), &x, Vec::new()))
+        .map(|x| Entity::new(EntityType::Field("".to_string()), &x, Vec::new(), Visibility::Private))
         .collect::<Vec<Entity>>();
-    Entity::new(EntityType::Struct, type_name, dependencies)
+    Entity::new(EntityType::Struct, type_name, dependencies, Visibility::Private)
 }
